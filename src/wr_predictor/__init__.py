@@ -1,0 +1,1 @@
+"""Wide receiver fantasy prediction package."""
