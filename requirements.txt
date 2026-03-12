@@ -1,0 +1,6 @@
+nflreadpy
+polars
+scikit-learn
+jupyter
+matplotlib
+pytest
