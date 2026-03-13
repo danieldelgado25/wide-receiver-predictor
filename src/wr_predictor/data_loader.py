@@ -8,32 +8,32 @@ def load_player_weekly_stats(seasons: list[int]) -> pl.DataFrame:
     """
     Load weekly player stats from nflreadpy.
     """
-    df = nfl.load_player_stats(seasons)
-    return _to_polars(df)
+    data_frame = nfl.load_player_stats(seasons)
+    return _to_polars(data_frame)
 
 
 def load_players() -> pl.DataFrame:
     """
     Load player metadata.
     """
-    df = nfl.load_players()
-    return _to_polars(df)
+    data_frame = nfl.load_players()
+    return _to_polars(data_frame)
 
 
 def load_schedules(seasons: list[int]) -> pl.DataFrame:
     """
     Load NFL schedules/results.
     """
-    df = nfl.load_schedules(seasons)
-    return _to_polars(df)
+    data_frame = nfl.load_schedules(seasons)
+    return _to_polars(data_frame)
 
 
 def load_injuries(seasons: list[int]) -> pl.DataFrame:
     """
     Load injuries/practice participation.
     """
-    df = nfl.load_injuries(seasons)
-    return _to_polars(df)
+    data_frame = nfl.load_injuries(seasons)
+    return _to_polars(data_frame)
 
 
 def load_ff_opportunity(seasons: list[int]) -> pl.DataFrame:
@@ -42,18 +42,18 @@ def load_ff_opportunity(seasons: list[int]) -> pl.DataFrame:
     Safe fallback if unavailable for your current setup.
     """
     try:
-        df = nfl.load_ff_opportunity(seasons)
-        return _to_polars(df)
+        data_frame = nfl.load_ff_opportunity(seasons)
+        return _to_polars(data_frame)
     except Exception:
         return pl.DataFrame()
 
 
-def _to_polars(df) -> pl.DataFrame:
+def _to_polars(data_frame) -> pl.DataFrame:
     """
     nflreadpy is Polars-native, but this keeps the wrapper defensive.
     """
-    if isinstance(df, pl.DataFrame):
-        return df
-    if hasattr(df, "to_pandas"):
-        return pl.from_pandas(df.to_pandas())
-    return pl.DataFrame(df)
+    if isinstance(data_frame, pl.DataFrame):
+        return data_frame
+    if hasattr(data_frame, "to_pandas"):
+        return pl.from_pandas(data_frame.to_pandas())
+    return pl.DataFrame(data_frame)

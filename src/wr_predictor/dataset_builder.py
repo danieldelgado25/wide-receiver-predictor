@@ -4,22 +4,22 @@ import os
 import polars as pl
 
 
-def add_next_week_target(df: pl.DataFrame) -> pl.DataFrame:
+def add_next_week_target(data_frame: pl.DataFrame) -> pl.DataFrame:
     """
     Create next week's fantasy output as the supervised-learning target.
     """
-    player_col = _find_first_existing(df.columns, ["player_id", "gsis_id", "player_name"])
-    season_col = _find_first_existing(df.columns, ["season"])
-    week_col = _find_first_existing(df.columns, ["week"])
+    player_col = _find_first_existing(data_frame.columns, ["player_id", "gsis_id", "player_name"])
+    season_col = _find_first_existing(data_frame.columns, ["season"])
+    week_col = _find_first_existing(data_frame.columns, ["week"])
 
     if not all([player_col, season_col, week_col]):
         raise ValueError("Missing player/season/week columns needed for target creation.")
 
-    if "ppr_points" not in df.columns:
+    if "ppr_points" not in data_frame.columns:
         raise ValueError("ppr_points must exist before creating the target.")
 
     return (
-        df.sort([player_col, season_col, week_col])
+        data_frame.sort([player_col, season_col, week_col])
         .with_columns(
             pl.col("ppr_points")
             .shift(-1)
@@ -29,8 +29,8 @@ def add_next_week_target(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def drop_rows_without_target(df: pl.DataFrame) -> pl.DataFrame:
-    return df.filter(pl.col("next_week_ppr_points").is_not_null())
+def drop_rows_without_target(data_frame: pl.DataFrame) -> pl.DataFrame:
+    return data_frame.filter(pl.col("next_week_ppr_points").is_not_null())
 
 
 def _find_first_existing(columns: list[str], candidates: list[str]) -> str | None:
