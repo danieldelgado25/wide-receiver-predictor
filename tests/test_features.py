@@ -3,8 +3,12 @@ import polars as pl
 from src.wr_predictor.features import add_basic_fantasy_points
 
 
+"""
+Uses Pytest to verify add_basic_fantasy_points function works as expected.
+"""
+
 def test_add_basic_fantasy_points() -> None:
-    df = pl.DataFrame(
+    data_frame = pl.DataFrame(
         {
             "rec": [5],
             "rec_yds": [80],
@@ -12,6 +16,6 @@ def test_add_basic_fantasy_points() -> None:
         }
     )
 
-    result = add_basic_fantasy_points(df)
+    result = add_basic_fantasy_points(data_frame)
     assert "ppr_points" in result.columns
     assert result["ppr_points"][0] == 19.0

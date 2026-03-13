@@ -2,6 +2,9 @@ from src.wr_predictor.dataset_builder import build_training_dataset
 
 
 def main() -> None:
+    """
+    Script to build the training dataset.
+    """
     data_frame = build_training_dataset(
         seasons=[2021, 2022, 2023, 2024],
         min_games_for_player=4,

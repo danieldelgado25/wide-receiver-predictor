@@ -3,6 +3,13 @@ from __future__ import annotations
 import os
 import polars as pl
 
+"""
+File imported by main.py to build the training dataset.
+Pulls data using data_loader.py, Filters to WRs using filters.py,
+Adds fantasy points using features.py, created targets using targets.py,
+Writes final dataset to a CSV file and returns the Polars DataFrame.
+"""
+
 
 def add_next_week_target(data_frame: pl.DataFrame) -> pl.DataFrame:
     """
