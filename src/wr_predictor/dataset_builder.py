@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import polars as pl
 
-from src.wr_predictor import data_loader, features
+from src.wr_predictor import data_loader, features, filters
 
 """
 File imported by main.py to build the training dataset.
@@ -18,6 +18,7 @@ def build_training_dataset(
     min_games_for_player: int = 4,
     output_path: str | None = None,
     position: str = "WR",
+    merge_ff_opportunity: bool = False,
 ) -> pl.DataFrame:
     """
     Build the WR training dataset: load stats, filter to position, add features
@@ -29,6 +30,9 @@ def build_training_dataset(
 
     # Normalize column names from nflreadpy (receptions, receiving_yards, receiving_tds) to our names
     weekly = _normalize_receiving_columns(weekly)
+
+    # Game context from schedules (spread, total, home flag) — all known before kickoff
+    weekly = _merge_schedule_context(weekly, seasons)
 
     # Filter to position (WR): join with players if position not in weekly
     player_col = _find_first_existing(weekly.columns, ["player_id", "gsis_id"])
@@ -49,6 +53,8 @@ def build_training_dataset(
             )
     if "position" in weekly.columns:
         weekly = weekly.filter(pl.col("position") == position)
+
+    weekly = filters.drop_special_teams_only_rows(weekly)
 
     # PPR fantasy points, then target and drop rows without target
     weekly = features.add_basic_fantasy_points(weekly)
@@ -75,7 +81,12 @@ def build_training_dataset(
     # Lag and rolling features, then model columns
     weekly = features.add_lag_features(weekly)
     weekly = features.add_rolling_features(weekly)
-    weekly = features.select_model_columns(weekly)
+
+    ff_extra_cols: list[str] = []
+    if merge_ff_opportunity:
+        weekly, ff_extra_cols = _merge_ff_opportunity(weekly, seasons)
+
+    weekly = features.select_model_columns(weekly, extra_feature_cols=ff_extra_cols)
 
     if output_path:
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -132,3 +143,91 @@ def _find_first_existing(columns: list[str], candidates: list[str]) -> str | Non
         if col in columns:
             return col
     return None
+
+
+def _merge_ff_opportunity(weekly: pl.DataFrame, seasons: list[int]) -> tuple[pl.DataFrame, list[str]]:
+    """
+    Join ffopportunity / expected fantasy metrics when available (ffverse data via nflreadpy).
+    Returns the frame and the list of joined numeric feature column names.
+    """
+    if weekly.is_empty():
+        return weekly, []
+
+    try:
+        ff = data_loader.load_ff_opportunity(seasons)
+    except Exception:
+        return weekly, []
+
+    if ff.is_empty():
+        return weekly, []
+
+    join_keys = [k for k in ("player_id", "season", "week") if k in ff.columns and k in weekly.columns]
+    if len(join_keys) < 3:
+        return weekly, []
+
+    numeric_cols: list[str] = []
+    for col in ff.columns:
+        if col in join_keys:
+            continue
+        dtype = ff.schema[col]
+        is_num = getattr(dtype, "is_numeric", lambda: False)()
+        if is_num:
+            numeric_cols.append(col)
+
+    preferred = [
+        c
+        for c in numeric_cols
+        if any(s in c.lower() for s in ("fantasy", "expected", "x_", "xp_", "proj", "opportunity"))
+    ]
+    pick = preferred[:8] if preferred else numeric_cols[:8]
+    if not pick:
+        return weekly, []
+
+    joined = weekly.join(ff.select(join_keys + pick), on=join_keys, how="left")
+    return joined, pick
+
+
+def _merge_schedule_context(weekly: pl.DataFrame, seasons: list[int]) -> pl.DataFrame:
+    """
+    Join nflverse schedule fields by game_id for pre-game situational features.
+    """
+    if weekly.is_empty() or "game_id" not in weekly.columns:
+        return weekly
+
+    try:
+        sched = data_loader.load_schedules(seasons)
+    except Exception:
+        return weekly
+
+    if sched.is_empty() or "game_id" not in sched.columns:
+        return weekly
+
+    sched_cols = [
+        c
+        for c in (
+            "game_id",
+            "home_team",
+            "away_team",
+            "spread_line",
+            "total_line",
+            "roof",
+            "surface",
+            "temp",
+            "wind",
+        )
+        if c in sched.columns
+    ]
+    sched_small = sched.select(sched_cols).unique(subset=["game_id"], keep="first")
+    out = weekly.join(sched_small, on="game_id", how="left")
+
+    if "team" in out.columns and "home_team" in out.columns:
+        out = out.with_columns(
+            (pl.col("team") == pl.col("home_team")).cast(pl.Int8).alias("is_home")
+        )
+    if "roof" in out.columns:
+        roof_str = pl.col("roof").cast(pl.Utf8).fill_null("")
+        out = out.with_columns(
+            roof_str.str.to_lowercase().str.contains("dome").cast(pl.Int8).alias("is_dome")
+        )
+
+    return out
