@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import polars as pl
 
-from src.wr_predictor import data_loader, features, filters
+from src.wr_predictor import data_loader, features, filters, targets
 
 """
 File imported by main.py to build the training dataset.
@@ -58,8 +58,8 @@ def build_training_dataset(
 
     # PPR fantasy points, then target and drop rows without target
     weekly = features.add_basic_fantasy_points(weekly)
-    weekly = add_next_week_target(weekly)
-    weekly = drop_rows_without_target(weekly)
+    weekly = targets.add_next_week_target(weekly)
+    weekly = targets.drop_rows_without_target(weekly)
 
     # Optional min games per player per season.
     # This can be used to restrict the training set, but is disabled
@@ -93,35 +93,6 @@ def build_training_dataset(
         weekly.write_csv(output_path)
 
     return weekly
-
-
-def add_next_week_target(data_frame: pl.DataFrame) -> pl.DataFrame:
-    """
-    Create next week's fantasy output as the supervised-learning target.
-    """
-    player_col = _find_first_existing(data_frame.columns, ["player_id", "gsis_id", "player_name"])
-    season_col = _find_first_existing(data_frame.columns, ["season"])
-    week_col = _find_first_existing(data_frame.columns, ["week"])
-
-    if not all([player_col, season_col, week_col]):
-        raise ValueError("Missing player/season/week columns needed for target creation.")
-
-    if "ppr_points" not in data_frame.columns:
-        raise ValueError("ppr_points must exist before creating the target.")
-
-    return (
-        data_frame.sort([player_col, season_col, week_col])
-        .with_columns(
-            pl.col("ppr_points")
-            .shift(-1)
-            .over(player_col)
-            .alias("next_week_ppr_points")
-        )
-    )
-
-
-def drop_rows_without_target(data_frame: pl.DataFrame) -> pl.DataFrame:
-    return data_frame.filter(pl.col("next_week_ppr_points").is_not_null())
 
 
 def _normalize_receiving_columns(data_frame: pl.DataFrame) -> pl.DataFrame:
