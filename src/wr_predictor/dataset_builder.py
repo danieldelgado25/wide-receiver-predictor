@@ -136,6 +136,13 @@ def _merge_ff_opportunity(weekly: pl.DataFrame, seasons: list[int]) -> tuple[pl.
     if len(join_keys) < 3:
         return weekly, []
 
+    # ff_opportunity returns season as a string and week as a float, while
+    # weekly's are both int. Align dtypes to weekly's before joining, or
+    # polars raises a SchemaError on the key dtype mismatch.
+    ff = ff.with_columns(
+        [pl.col(key).cast(weekly.schema[key]) for key in ("season", "week") if key in ff.columns]
+    )
+
     numeric_cols: list[str] = []
     for col in ff.columns:
         if col in join_keys:
